@@ -1,10 +1,11 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image, Switch, Modal, Share, Alert } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image, Switch, Share, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import { tripsAPI } from '../../services/api';
+import SwipeableBottomSheet from '../../components/SwipeableBottomSheet';
 import { spacing, shadows, borderRadius } from '../../styles/theme';
 
 export default function ProfileScreen() {
@@ -13,7 +14,6 @@ export default function ProfileScreen() {
   const [trips, setTrips] = useState([]);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     loadTrips();
@@ -173,71 +173,57 @@ export default function ProfileScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Currency Picker Modal */}
-      <Modal visible={showCurrencyPicker} transparent animationType="slide">
-        <View style={s.modalOverlay}>
-          <View style={[s.modalSheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
-            <View style={s.modalHandle} />
-            <Text style={[s.modalTitle, { color: colors.textPrimary }]}>Select Currency</Text>
-            {currencies.map((c) => (
-              <TouchableOpacity
-                key={c}
-                style={[s.currencyItem, currency === c && { backgroundColor: colors.primaryLight }]}
-                onPress={() => {
-                  updateCurrency(c);
-                  setShowCurrencyPicker(false);
-                }}
-              >
-                <Text style={[s.currencyText, { color: colors.textPrimary }, currency === c && { color: colors.primary, fontWeight: '700' }]}>{c}</Text>
-                {currency === c && <Ionicons name="checkmark" size={22} color={colors.primary} />}
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity style={s.modalCancel} onPress={() => setShowCurrencyPicker(false)}>
-              <Text style={[s.modalCancelText, { color: colors.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* Currency Picker */}
+      <SwipeableBottomSheet visible={showCurrencyPicker} onClose={() => setShowCurrencyPicker(false)} maxHeightRatio={0.6}>
+        <Text style={[s.modalTitle, { color: colors.textPrimary }]}>Select Currency</Text>
+        {currencies.map((c) => (
+          <TouchableOpacity
+            key={c}
+            style={[s.currencyItem, currency === c && { backgroundColor: colors.primaryLight }]}
+            onPress={() => {
+              updateCurrency(c);
+              setShowCurrencyPicker(false);
+            }}
+          >
+            <Text style={[s.currencyText, { color: colors.textPrimary }, currency === c && { color: colors.primary, fontWeight: '700' }]}>{c}</Text>
+            {currency === c && <Ionicons name="checkmark" size={22} color={colors.primary} />}
+          </TouchableOpacity>
+        ))}
+      </SwipeableBottomSheet>
 
-      {/* About Modal */}
-      <Modal visible={showAbout} transparent animationType="slide">
-        <View style={s.modalOverlay}>
-          <View style={[s.modalSheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
-            <View style={s.modalHandle} />
-            <View style={s.aboutHeader}>
-              <View style={[s.aboutLogo, { backgroundColor: colors.primaryLight }]}>
-                <Ionicons name="airplane" size={32} color={colors.primary} />
-              </View>
-              <Text style={[s.aboutTitle, { color: colors.textPrimary }]}>TripCraft</Text>
-              <Text style={[s.aboutVersion, { color: colors.textMuted }]}>Version 1.0.0</Text>
+      {/* About */}
+      <SwipeableBottomSheet visible={showAbout} onClose={() => setShowAbout(false)} maxHeightRatio={0.75}>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <View style={s.aboutHeader}>
+            <View style={[s.aboutLogo, { backgroundColor: colors.primaryLight }]}>
+              <Ionicons name="airplane" size={32} color={colors.primary} />
             </View>
-            <Text style={[s.aboutText, { color: colors.textSecondary }]}>
-              TripCraft is your AI-powered solo travel companion. Plan perfect trips with personalized itineraries, smart budget tracking, interactive maps, and curated packing lists.
-            </Text>
-            <Text style={[s.aboutText, { color: colors.textSecondary, marginTop: spacing.md }]}>
-              Built with React Native, Expo, Node.js, MongoDB, and OpenAI.
-            </Text>
-            <View style={s.aboutFeatures}>
-              {[
-                { icon: 'sparkles', text: 'AI-Generated Itineraries' },
-                { icon: 'map', text: 'Interactive Maps' },
-                { icon: 'wallet', text: 'Budget Tracking' },
-                { icon: 'bag', text: 'Smart Packing Lists' },
-                { icon: 'sunny', text: 'Weather Forecasts' },
-                { icon: 'pencil', text: 'Edit & Customize' },
-              ].map((f) => (
-                <View key={f.text} style={s.aboutFeatureRow}>
-                  <Ionicons name={f.icon} size={18} color={colors.primary} />
-                  <Text style={[s.aboutFeatureText, { color: colors.textPrimary }]}>{f.text}</Text>
-                </View>
-              ))}
-            </View>
-            <TouchableOpacity style={s.modalCancel} onPress={() => setShowAbout(false)}>
-              <Text style={[s.modalCancelText, { color: colors.textSecondary }]}>Close</Text>
-            </TouchableOpacity>
+            <Text style={[s.aboutTitle, { color: colors.textPrimary }]}>TripCraft</Text>
+            <Text style={[s.aboutVersion, { color: colors.textMuted }]}>Version 1.0.0</Text>
           </View>
-        </View>
-      </Modal>
+          <Text style={[s.aboutText, { color: colors.textSecondary }]}>
+            TripCraft is your AI-powered solo travel companion. Plan perfect trips with personalized itineraries, smart budget tracking, interactive maps, and curated packing lists.
+          </Text>
+          <Text style={[s.aboutText, { color: colors.textSecondary, marginTop: spacing.md }]}>
+            Built with React Native, Expo, Node.js, MongoDB, and OpenAI.
+          </Text>
+          <View style={s.aboutFeatures}>
+            {[
+              { icon: 'sparkles', text: 'AI-Generated Itineraries' },
+              { icon: 'map', text: 'Interactive Maps' },
+              { icon: 'wallet', text: 'Budget Tracking' },
+              { icon: 'bag', text: 'Smart Packing Lists' },
+              { icon: 'sunny', text: 'Weather Forecasts' },
+              { icon: 'pencil', text: 'Edit & Customize' },
+            ].map((f) => (
+              <View key={f.text} style={s.aboutFeatureRow}>
+                <Ionicons name={f.icon} size={18} color={colors.primary} />
+                <Text style={[s.aboutFeatureText, { color: colors.textPrimary }]}>{f.text}</Text>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      </SwipeableBottomSheet>
     </SafeAreaView>
   );
 }

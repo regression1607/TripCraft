@@ -1,9 +1,9 @@
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Modal, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import SwipeableBottomSheet from './SwipeableBottomSheet';
 import ChipSelect from './ChipSelect';
-import { typography, spacing, borderRadius, shadows } from '../styles/theme';
+import { typography, spacing, borderRadius } from '../styles/theme';
 import { useSettings } from '../context/SettingsContext';
 
 const activityTypes = [
@@ -16,7 +16,6 @@ const activityTypes = [
 
 export default function EditActivityModal({ visible, activity, onSave, onDelete, onClose }) {
   const { colors } = useSettings();
-  const insets = useSafeAreaInsets();
   const [form, setForm] = useState({
     title: '',
     time: '',
@@ -61,12 +60,8 @@ export default function EditActivityModal({ visible, activity, onSave, onDelete,
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={[styles.sheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + spacing.lg }]}>
-          <View style={[styles.handle, { backgroundColor: colors.border }]} />
-
-          <ScrollView showsVerticalScrollIndicator={false}>
+    <SwipeableBottomSheet visible={visible} onClose={onClose}>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={styles.title}>
               {activity?._id ? 'Edit Activity' : 'Add Activity'}
             </Text>
@@ -156,31 +151,11 @@ export default function EditActivityModal({ visible, activity, onSave, onDelete,
               </TouchableOpacity>
             )}
           </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+    </SwipeableBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    padding: spacing.xl,
-    maxHeight: '85%',
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: spacing.lg,
-  },
   title: {
     ...typography.headingL,
     marginBottom: spacing.xxl,
