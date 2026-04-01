@@ -176,19 +176,21 @@ export default function ProfileScreen() {
       {/* Currency Picker */}
       <SwipeableBottomSheet visible={showCurrencyPicker} onClose={() => setShowCurrencyPicker(false)} maxHeightRatio={0.6}>
         <Text style={[s.modalTitle, { color: colors.textPrimary }]}>Select Currency</Text>
-        {currencies.map((c) => (
-          <TouchableOpacity
-            key={c}
-            style={[s.currencyItem, currency === c && { backgroundColor: colors.primaryLight }]}
-            onPress={() => {
-              updateCurrency(c);
-              setShowCurrencyPicker(false);
-            }}
-          >
-            <Text style={[s.currencyText, { color: colors.textPrimary }, currency === c && { color: colors.primary, fontWeight: '700' }]}>{c}</Text>
-            {currency === c && <Ionicons name="checkmark" size={22} color={colors.primary} />}
-          </TouchableOpacity>
-        ))}
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {currencies.map((c) => (
+            <TouchableOpacity
+              key={c}
+              style={[s.currencyItem, currency === c && { backgroundColor: colors.primaryLight }]}
+              onPress={() => {
+                updateCurrency(c);
+                setShowCurrencyPicker(false);
+              }}
+            >
+              <Text style={[s.currencyText, { color: colors.textPrimary }, currency === c && { color: colors.primary, fontWeight: '700' }]}>{c}</Text>
+              {currency === c && <Ionicons name="checkmark" size={22} color={colors.primary} />}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </SwipeableBottomSheet>
 
       {/* About */}
