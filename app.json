@@ -5,25 +5,42 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "scheme": "tripcraft",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FF6B35"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.tripcraft.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#FF6B35"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.tripcraft.app"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "apiUrl": "http://192.168.1.45:5000/api",
+      "firebaseApiKey": "AIzaSyBQF1k6tBRiz79DnZm1fbRpyCjMcAVDbMk",
+      "firebaseAuthDomain": "tripcraft-f2e84.firebaseapp.com",
+      "firebaseProjectId": "tripcraft-f2e84",
+      "firebaseStorageBucket": "tripcraft-f2e84.firebasestorage.app",
+      "firebaseMessagingSenderId": "648147915355",
+      "firebaseAppId": "1:648147915355:web:4eb742a8e1e7917c79657e"
     }
   }
 }
