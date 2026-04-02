@@ -2,7 +2,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import { authAPI, tripsAPI } from '../../services/api';
@@ -27,17 +27,21 @@ export default function HomeScreen() {
 
   const firstName = user?.name?.split(' ')[0] || 'Traveler';
 
+  const initialized = useRef(false);
+
   useEffect(() => {
-    initUser();
-  }, []);
+    if (user && !initialized.current) {
+      initialized.current = true;
+      initUser();
+    }
+  }, [user]);
 
   const initUser = async () => {
     try {
-      console.log('[HOME] Verifying user in backend...');
       await authAPI.verify();
-      console.log('[HOME] User verified, loading trips...');
+      console.log('[HOME] User verified in backend');
     } catch (e) {
-      console.log('[HOME] Auth verify failed (may be first time):', e.message);
+      // Non-critical - user may already exist
     }
     loadTrips();
   };

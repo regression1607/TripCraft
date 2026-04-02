@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -75,6 +76,22 @@ export default function LoginScreen() {
       Alert.alert('Authentication Error', msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      Alert.alert('Enter Email', 'Please enter your email address first, then tap Forgot Password.');
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      Alert.alert('Reset Email Sent', `We've sent a password reset link to ${email.trim()}. Check your inbox.`);
+    } catch (error) {
+      let msg = 'Could not send reset email. Please try again.';
+      if (error.code === 'auth/user-not-found') msg = 'No account found with this email.';
+      if (error.code === 'auth/invalid-email') msg = 'Please enter a valid email address.';
+      Alert.alert('Error', msg);
     }
   };
 
@@ -163,6 +180,12 @@ export default function LoginScreen() {
                   />
                 </TouchableOpacity>
               </View>
+
+              {!isSignUp && (
+                <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
+                  <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 style={[styles.authButton, loading && styles.authButtonDisabled]}
@@ -316,6 +339,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textPrimary,
     height: '100%',
+  },
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    paddingVertical: 4,
+    marginBottom: 4,
+  },
+  forgotPasswordText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FF6B35',
   },
   authButton: {
     backgroundColor: '#FF6B35',
