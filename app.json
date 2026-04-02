@@ -34,7 +34,7 @@
       "expo-web-browser"
     ],
     "extra": {
-      "apiUrl": "http://192.168.1.45:5000/api",
+      "apiUrl": "https://trip-craft-backend.vercel.app/api",
       "firebaseApiKey": "AIzaSyBQF1k6tBRiz79DnZm1fbRpyCjMcAVDbMk",
       "firebaseAuthDomain": "tripcraft-f2e84.firebaseapp.com",
       "firebaseProjectId": "tripcraft-f2e84",
