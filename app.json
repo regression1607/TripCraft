@@ -40,7 +40,12 @@
       "firebaseProjectId": "tripcraft-f2e84",
       "firebaseStorageBucket": "tripcraft-f2e84.firebasestorage.app",
       "firebaseMessagingSenderId": "648147915355",
-      "firebaseAppId": "1:648147915355:web:4eb742a8e1e7917c79657e"
-    }
+      "firebaseAppId": "1:648147915355:web:4eb742a8e1e7917c79657e",
+      "router": {},
+      "eas": {
+        "projectId": "0a68b4c9-b6fb-4fad-8304-31cbe388b297"
+      }
+    },
+    "owner": "ekanshrajput1607"
   }
 }
