@@ -67,7 +67,19 @@ export default function NewTripScreen() {
       const tripRes = await tripsAPI.create(tripData);
       const trip = tripRes.data.trip;
 
-      // Navigate to trip detail - user can generate itinerary there
+      // Auto-create trip group for chat
+      try {
+        await import('../services/chatApi').then(({ chatAPI }) =>
+          chatAPI.createTripGroup({
+            tripId: trip._id,
+            destination: tripData.destination.name,
+            name: `Trip to ${tripData.destination.name}`,
+          })
+        );
+      } catch (e) {
+        // Non-critical - trip group creation can fail silently
+      }
+
       router.replace(`/trip/${trip._id}`);
     } catch (error) {
       console.error('Create trip error:', error);

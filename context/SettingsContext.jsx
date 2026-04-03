@@ -9,6 +9,7 @@ const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD', 'THB'];
 export function SettingsProvider({ children }) {
   const [darkMode, setDarkMode] = useState(false);
   const [currency, setCurrency] = useState('USD');
+  const [chatMode, setChatMode] = useState('online'); // 'online' | 'offline'
 
   const themeColors = darkMode ? darkColors : lightColors;
   const themeTypography = getTypography(themeColors);
@@ -24,6 +25,7 @@ export function SettingsProvider({ children }) {
         const parsed = JSON.parse(stored);
         setDarkMode(parsed.darkMode || false);
         setCurrency(parsed.currency || 'USD');
+        setChatMode(parsed.chatMode || 'online');
       }
     } catch (e) {
       // silent
@@ -41,12 +43,18 @@ export function SettingsProvider({ children }) {
   const toggleDarkMode = () => {
     const newValue = !darkMode;
     setDarkMode(newValue);
-    saveSettings({ darkMode: newValue, currency });
+    saveSettings({ darkMode: newValue, currency, chatMode });
   };
 
   const updateCurrency = (newCurrency) => {
     setCurrency(newCurrency);
-    saveSettings({ darkMode, currency: newCurrency });
+    saveSettings({ darkMode, currency: newCurrency, chatMode });
+  };
+
+  const toggleChatMode = () => {
+    const newMode = chatMode === 'online' ? 'offline' : 'online';
+    setChatMode(newMode);
+    saveSettings({ darkMode, currency, chatMode: newMode });
   };
 
   return (
@@ -57,6 +65,8 @@ export function SettingsProvider({ children }) {
         currency,
         updateCurrency,
         currencies: CURRENCIES,
+        chatMode,
+        toggleChatMode,
         colors: themeColors,
         typography: themeTypography,
       }}

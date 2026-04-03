@@ -1,19 +1,45 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image, Switch, Share, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  Image,
+  Switch,
+  Share,
+  Alert,
+  TextInput,
+  ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
-import { tripsAPI } from '../../services/api';
+import { tripsAPI, usersAPI } from '../../services/api';
 import SwipeableBottomSheet from '../../components/SwipeableBottomSheet';
 import { spacing, shadows, borderRadius } from '../../styles/theme';
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
-  const { darkMode, toggleDarkMode, currency, updateCurrency, currencies, colors, typography } = useSettings();
+  const { user, logout, updateUser } = useAuth();
+  const { darkMode, toggleDarkMode, currency, updateCurrency, currencies, colors, typography, chatMode, toggleChatMode } = useSettings();
   const [trips, setTrips] = useState([]);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+
+  // Username edit state
+  const [showUsernameEdit, setShowUsernameEdit] = useState(false);
+  const [usernameInput, setUsernameInput] = useState('');
+  const [usernameAvailability, setUsernameAvailability] = useState(null); // null | 'checking' | 'available' | 'taken' | 'invalid'
+  const [usernameSaving, setUsernameSaving] = useState(false);
+  const usernameDebounceRef = useRef(null);
+
+  // Avatar picker state
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   useEffect(() => {
     loadTrips();
@@ -80,21 +106,180 @@ export default function ProfileScreen() {
     }
   };
 
+  // ── Username helpers ──────────────────────────────────────────────────────
+
+  const openUsernameEdit = () => {
+    setUsernameInput(user?.username || '');
+    setUsernameAvailability(null);
+    setShowUsernameEdit(true);
+  };
+
+  const onUsernameChange = (text) => {
+    // Only allow alphanumeric + underscores
+    const cleaned = text.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
+    setUsernameInput(cleaned);
+
+    if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current);
+
+    if (cleaned.length === 0) {
+      setUsernameAvailability(null);
+      return;
+    }
+    if (cleaned.length < 3) {
+      setUsernameAvailability('invalid');
+      return;
+    }
+    if (cleaned === user?.username) {
+      setUsernameAvailability('available');
+      return;
+    }
+
+    setUsernameAvailability('checking');
+    usernameDebounceRef.current = setTimeout(async () => {
+      try {
+        const res = await usersAPI.checkUsername(cleaned);
+        setUsernameAvailability(res.data.available ? 'available' : 'taken');
+      } catch (e) {
+        setUsernameAvailability(null);
+      }
+    }, 500);
+  };
+
+  const handleSaveUsername = async () => {
+    if (usernameAvailability !== 'available') return;
+    setUsernameSaving(true);
+    try {
+      await usersAPI.updateUsername(usernameInput);
+      await updateUser({ username: usernameInput });
+      setShowUsernameEdit(false);
+    } catch (e) {
+      Alert.alert('Error', 'Could not update username. Please try again.');
+    } finally {
+      setUsernameSaving(false);
+    }
+  };
+
+  const getUsernameStatusIcon = () => {
+    switch (usernameAvailability) {
+      case 'checking':
+        return <ActivityIndicator size="small" color={colors.textMuted} />;
+      case 'available':
+        return <Ionicons name="checkmark-circle" size={20} color="#22C55E" />;
+      case 'taken':
+        return <Ionicons name="close-circle" size={20} color={colors.error} />;
+      case 'invalid':
+        return <Ionicons name="alert-circle" size={20} color="#F59E0B" />;
+      default:
+        return null;
+    }
+  };
+
+  const getUsernameStatusText = () => {
+    switch (usernameAvailability) {
+      case 'available':
+        return { text: 'Username is available', color: '#22C55E' };
+      case 'taken':
+        return { text: 'Username is already taken', color: colors.error };
+      case 'invalid':
+        return { text: 'Must be at least 3 characters', color: '#F59E0B' };
+      default:
+        return null;
+    }
+  };
+
+  // ── Avatar helpers ────────────────────────────────────────────────────────
+
+  const pickAndUploadImage = async (source) => {
+    setShowAvatarPicker(false);
+    try {
+      let result;
+      if (source === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 1 });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Photo library access is needed to choose a photo.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 1, mediaTypes: ImagePicker.MediaTypeOptions.Images });
+      }
+
+      if (result.canceled) return;
+
+      setAvatarUploading(true);
+
+      // Resize to 150x150 and compress to 50% JPEG
+      const manipulated = await ImageManipulator.manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: 150, height: 150 } }],
+        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      // Convert to base64
+      const base64 = await FileSystem.readAsStringAsync(manipulated.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const base64Uri = `data:image/jpeg;base64,${base64}`;
+
+      await usersAPI.updateProfilePhoto(base64Uri);
+      await updateUser({ avatar: base64Uri });
+    } catch (e) {
+      Alert.alert('Error', 'Could not update profile photo. Please try again.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    setShowAvatarPicker(false);
+    try {
+      setAvatarUploading(true);
+      await usersAPI.removeProfilePhoto();
+      await updateUser({ avatar: '' });
+    } catch (e) {
+      Alert.alert('Error', 'Could not remove profile photo. Please try again.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   const s = getStyles(colors, typography);
 
   return (
     <SafeAreaView style={[s.container, { backgroundColor: colors.background }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={s.profileHeader}>
-          <View style={[s.avatar, { backgroundColor: colors.primaryLight }]}>
-            {user?.avatar ? (
-              <Image source={{ uri: user.avatar }} style={s.avatarImage} />
-            ) : (
-              <Ionicons name="person" size={40} color={colors.textMuted} />
-            )}
-          </View>
+          {/* Tappable avatar with camera overlay */}
+          <TouchableOpacity onPress={() => setShowAvatarPicker(true)} style={s.avatarWrapper}>
+            <View style={[s.avatar, { backgroundColor: colors.primaryLight }]}>
+              {avatarUploading ? (
+                <ActivityIndicator size="large" color={colors.primary} />
+              ) : user?.avatar ? (
+                <Image source={{ uri: user.avatar }} style={s.avatarImage} />
+              ) : (
+                <Ionicons name="person" size={40} color={colors.textMuted} />
+              )}
+            </View>
+            <View style={[s.cameraOverlay, { backgroundColor: colors.primary }]}>
+              <Ionicons name="camera" size={12} color="#FFFFFF" />
+            </View>
+          </TouchableOpacity>
+
           <Text style={[s.name, { color: colors.textPrimary }]}>{user?.name || 'Traveler'}</Text>
           <Text style={[s.email, { color: colors.textSecondary }]}>{user?.email || ''}</Text>
+
+          {/* Username row */}
+          <TouchableOpacity onPress={openUsernameEdit} style={s.usernameRow}>
+            <Text style={[s.usernameText, { color: colors.primary }]}>
+              {user?.username ? `@${user.username}` : 'Set username'}
+            </Text>
+            <Ionicons name="pencil" size={13} color={colors.primary} style={{ marginLeft: 4 }} />
+          </TouchableOpacity>
         </View>
 
         {/* Stats */}
@@ -139,6 +324,21 @@ export default function ProfileScreen() {
             <Ionicons name="notifications-outline" size={22} color={colors.textSecondary} />
             <Text style={[s.menuLabel, { color: colors.textPrimary }]}>Notifications</Text>
             <Text style={[s.menuValue, { color: colors.textMuted }]}>Coming soon</Text>
+          </View>
+
+          {/* Chat Mode */}
+          <View style={[s.menuItem, s.menuItemBorder]}>
+            <Ionicons name="cloud-outline" size={22} color={colors.textSecondary} />
+            <Text style={[s.menuLabel, { color: colors.textPrimary }]}>Chat Mode</Text>
+            <Text style={[s.menuValue, { color: colors.textMuted }]}>
+              {chatMode === 'online' ? 'Online' : 'Offline'}
+            </Text>
+            <Switch
+              value={chatMode === 'online'}
+              onValueChange={toggleChatMode}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor="#FFFFFF"
+            />
           </View>
 
           {/* Export */}
@@ -193,6 +393,76 @@ export default function ProfileScreen() {
         </ScrollView>
       </SwipeableBottomSheet>
 
+      {/* Username Edit Sheet */}
+      <SwipeableBottomSheet visible={showUsernameEdit} onClose={() => setShowUsernameEdit(false)} maxHeightRatio={0.55}>
+        <Text style={[s.modalTitle, { color: colors.textPrimary }]}>Edit Username</Text>
+
+        {/* Input row */}
+        <View style={[s.usernameInputRow, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary || colors.background }]}>
+          <Text style={[s.usernameAtSign, { color: colors.textMuted }]}>@</Text>
+          <TextInput
+            style={[s.usernameInput, { color: colors.textPrimary }]}
+            value={usernameInput}
+            onChangeText={onUsernameChange}
+            placeholder="your_username"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoFocus
+            maxLength={30}
+          />
+          <View style={s.usernameStatusIcon}>{getUsernameStatusIcon()}</View>
+        </View>
+
+        {/* Status text */}
+        {getUsernameStatusText() && (
+          <Text style={[s.usernameStatusText, { color: getUsernameStatusText().color }]}>
+            {getUsernameStatusText().text}
+          </Text>
+        )}
+
+        {/* Rules */}
+        <Text style={[s.usernameRules, { color: colors.textMuted }]}>
+          3–30 characters. Letters, numbers, and underscores only.
+        </Text>
+
+        {/* Save button */}
+        <TouchableOpacity
+          style={[
+            s.saveButton,
+            { backgroundColor: usernameAvailability === 'available' ? colors.primary : colors.border },
+          ]}
+          onPress={handleSaveUsername}
+          disabled={usernameAvailability !== 'available' || usernameSaving}
+        >
+          {usernameSaving ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Text style={s.saveButtonText}>Save Username</Text>
+          )}
+        </TouchableOpacity>
+      </SwipeableBottomSheet>
+
+      {/* Avatar Picker Sheet */}
+      <SwipeableBottomSheet visible={showAvatarPicker} onClose={() => setShowAvatarPicker(false)} maxHeightRatio={0.38}>
+        <Text style={[s.modalTitle, { color: colors.textPrimary }]}>Profile Photo</Text>
+
+        <TouchableOpacity style={[s.avatarOption, s.menuItemBorder, { borderBottomColor: colors.border }]} onPress={() => pickAndUploadImage('camera')}>
+          <Ionicons name="camera-outline" size={22} color={colors.textSecondary} />
+          <Text style={[s.avatarOptionText, { color: colors.textPrimary }]}>Take Photo</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[s.avatarOption, s.menuItemBorder, { borderBottomColor: colors.border }]} onPress={() => pickAndUploadImage('gallery')}>
+          <Ionicons name="image-outline" size={22} color={colors.textSecondary} />
+          <Text style={[s.avatarOptionText, { color: colors.textPrimary }]}>Choose from Gallery</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={s.avatarOption} onPress={handleRemovePhoto}>
+          <Ionicons name="trash-outline" size={22} color={colors.error} />
+          <Text style={[s.avatarOptionText, { color: colors.error }]}>Remove Photo</Text>
+        </TouchableOpacity>
+      </SwipeableBottomSheet>
+
       {/* About */}
       <SwipeableBottomSheet visible={showAbout} onClose={() => setShowAbout(false)} maxHeightRatio={0.75}>
         <ScrollView showsVerticalScrollIndicator={false}>
@@ -239,18 +509,33 @@ const getStyles = (colors, typography) => StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xxl,
   },
+  avatarWrapper: {
+    position: 'relative',
+    marginBottom: spacing.md,
+  },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.md,
   },
   avatarImage: {
     width: 80,
     height: 80,
     borderRadius: 40,
+  },
+  cameraOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   name: {
     fontSize: 22,
@@ -259,6 +544,16 @@ const getStyles = (colors, typography) => StyleSheet.create({
   },
   email: {
     fontSize: 14,
+    marginBottom: spacing.xs,
+  },
+  usernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
+  usernameText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   statsCard: {
     borderRadius: borderRadius.lg,
@@ -363,6 +658,59 @@ const getStyles = (colors, typography) => StyleSheet.create({
   modalCancelText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Username edit sheet
+  usernameInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  usernameAtSign: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginRight: 2,
+  },
+  usernameInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: spacing.xs,
+  },
+  usernameStatusIcon: {
+    width: 24,
+    alignItems: 'center',
+  },
+  usernameStatusText: {
+    fontSize: 13,
+    marginBottom: spacing.xs,
+  },
+  usernameRules: {
+    fontSize: 12,
+    marginBottom: spacing.lg,
+  },
+  saveButton: {
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  // Avatar picker sheet
+  avatarOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    gap: spacing.md,
+  },
+  avatarOptionText: {
+    fontSize: 16,
   },
   // About
   aboutHeader: {

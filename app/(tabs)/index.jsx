@@ -11,7 +11,7 @@ import { getRandomSuggestions } from '../../utils/destinations';
 import { spacing, shadows, borderRadius } from '../../styles/theme';
 
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { colors, typography } = useSettings();
   const router = useRouter();
   const [trips, setTrips] = useState([]);
@@ -38,10 +38,19 @@ export default function HomeScreen() {
 
   const initUser = async () => {
     try {
-      await authAPI.verify();
-      console.log('[HOME] User verified in backend');
+      const res = await authAPI.verify();
+      const backendUser = res.data.user;
+      // Sync username/mongoId/avatar from backend
+      if (backendUser) {
+        updateUser({
+          username: backendUser.username || '',
+          mongoId: backendUser._id || '',
+          avatar: backendUser.avatar || user?.avatar || '',
+        });
+      }
+      console.log('[HOME] User verified:', backendUser?.username);
     } catch (e) {
-      // Non-critical - user may already exist
+      // Non-critical
     }
     loadTrips();
   };

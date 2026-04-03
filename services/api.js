@@ -63,4 +63,16 @@ export const weatherAPI = {
   getByCity: (city) => api.get(`/weather/${encodeURIComponent(city)}`),
 };
 
+export const usersAPI = {
+  search: (q) => api.get('/users/search', { params: { q } }),
+  checkUsername: (username) => api.get('/users/check-username', { params: { username } }),
+  updateUsername: (username) => api.put('/users/username', { username }),
+  updateProfilePhoto: (avatar) => api.put('/users/profile-photo', { avatar }),
+  removeProfilePhoto: () => api.delete('/users/profile-photo'),
+  addFriend: (friendId) => api.post('/users/friends', { friendId }),
+  getFriends: () => api.get('/users/friends'),
+  acceptFriend: (id) => api.put(`/users/friends/${id}/accept`),
+  removeFriend: (id) => api.delete(`/users/friends/${id}`),
+};
+
 export default api;

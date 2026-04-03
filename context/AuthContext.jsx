@@ -13,15 +13,20 @@ export function AuthProvider({ children }) {
   const segments = useSegments();
 
   useEffect(() => {
-    // Listen for Firebase auth state changes - auto-refreshes token
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const token = await firebaseUser.getIdToken(true); // force refresh
+        const token = await firebaseUser.getIdToken(true);
+        // Load stored user to get username/avatar from backend
+        const stored = await AsyncStorage.getItem('user');
+        const storedData = stored ? JSON.parse(stored) : {};
+
         const userData = {
           id: firebaseUser.uid,
           name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
           email: firebaseUser.email,
-          avatar: firebaseUser.photoURL || '',
+          avatar: storedData.avatar || firebaseUser.photoURL || '',
+          username: storedData.username || '',
+          mongoId: storedData.mongoId || '',
           token,
         };
         console.log('[AUTH] Firebase user detected:', userData.email);
@@ -29,14 +34,10 @@ export function AuthProvider({ children }) {
         await AsyncStorage.setItem('user', JSON.stringify(userData));
         await AsyncStorage.setItem('token', token);
       } else {
-        // No firebase user - check stored user as fallback
         try {
           const stored = await AsyncStorage.getItem('user');
           if (stored) {
-            const parsed = JSON.parse(stored);
-            console.log('[AUTH] Loaded stored user (no Firebase session):', parsed.email);
-            // Token is likely expired, force re-login
-            console.log('[AUTH] Token likely expired, clearing session');
+            console.log('[AUTH] Token expired, clearing session');
             await AsyncStorage.removeItem('user');
             await AsyncStorage.removeItem('token');
           }
@@ -52,15 +53,10 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (loading) return;
-
     const inAuthGroup = segments[0] === 'login';
-    console.log('[AUTH] Route guard:', { user: user?.email, segment: segments[0], inAuthGroup });
-
     if (!user && !inAuthGroup) {
-      console.log('[AUTH] No user, redirecting to /login');
       router.replace('/login');
     } else if (user && inAuthGroup) {
-      console.log('[AUTH] User logged in, redirecting to /');
       router.replace('/');
     }
   }, [user, segments, loading]);
@@ -72,17 +68,19 @@ export function AuthProvider({ children }) {
     if (userData.token) {
       await AsyncStorage.setItem('token', userData.token);
     }
-    console.log('[AUTH] Navigating to home...');
     router.replace('/');
+  };
+
+  // Update user data from backend (username, avatar, mongoId)
+  const updateUser = async (updates) => {
+    const newUser = { ...user, ...updates };
+    setUser(newUser);
+    await AsyncStorage.setItem('user', JSON.stringify(newUser));
   };
 
   const logout = async () => {
     console.log('[AUTH] Logout');
-    try {
-      await auth.signOut();
-    } catch (e) {
-      // silent
-    }
+    try { await auth.signOut(); } catch (e) {}
     setUser(null);
     await AsyncStorage.removeItem('user');
     await AsyncStorage.removeItem('token');
@@ -90,7 +88,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
