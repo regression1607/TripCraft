@@ -17,9 +17,4 @@ export const chatAPI = {
   createTripGroup: (data) => api.post('/chat/trip-groups', data),
 
   getUnreadCount: () => api.get('/chat/unread'),
-
-  // Nearby (location-based)
-  nearbyPing: (lat, lng) => api.post('/chat/nearby/ping', { lat, lng }),
-  nearbyUsers: () => api.get('/chat/nearby/users'),
-  nearbyStop: () => api.post('/chat/nearby/stop'),
 };
