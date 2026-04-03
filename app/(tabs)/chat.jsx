@@ -7,6 +7,8 @@ import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import { chatAPI } from '../../services/chatApi';
+import { initBLE, startScanning, stopScanning, isAvailable } from '../../services/bleChat';
+import { getCachedConversations, cacheConversations } from '../../services/offlineChat';
 import usePolling from '../../hooks/usePolling';
 import useNetworkStatus from '../../hooks/useNetworkStatus';
 import ChatListItem from '../../components/chat/ChatListItem';
@@ -21,9 +23,31 @@ export default function ChatScreen() {
   const isOnline = useNetworkStatus();
   const [search, setSearch] = useState('');
 
+  const [offlineConversations, setOfflineConversations] = useState([]);
+
+  // Start BLE scanning when offline mode is active
+  useEffect(() => {
+    if (chatMode === 'offline') {
+      initBLE(user);
+      if (isAvailable()) startScanning();
+      loadOfflineConversations();
+    } else {
+      stopScanning();
+    }
+    return () => stopScanning();
+  }, [chatMode]);
+
+  const loadOfflineConversations = async () => {
+    const cached = await getCachedConversations();
+    setOfflineConversations(cached);
+  };
+
   const fetchConversations = useCallback(async () => {
     const res = await chatAPI.getConversations();
-    return res.data.conversations || [];
+    const convs = res.data.conversations || [];
+    // Cache for offline use
+    if (convs.length > 0) cacheConversations(convs).catch(() => {});
+    return convs;
   }, []);
 
   const { data: conversations, loading, refresh } = usePolling(
@@ -32,7 +56,9 @@ export default function ChatScreen() {
     isFocused && chatMode === 'online'
   );
 
-  const filtered = (conversations || []).filter(c => {
+  const displayConversations = chatMode === 'offline' ? offlineConversations : conversations;
+
+  const filtered = (displayConversations || []).filter(c => {
     if (!search) return true;
     const q = search.toLowerCase();
     return (c.name || '').toLowerCase().includes(q) ||

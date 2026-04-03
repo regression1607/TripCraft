@@ -7,6 +7,8 @@ import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import { chatAPI } from '../../services/chatApi';
+import { sendOfflineMessage, onMessageReceived } from '../../services/bleChat';
+import { saveOfflineMessage, getOfflineMessages, syncPendingMessages } from '../../services/offlineChat';
 import usePolling from '../../hooks/usePolling';
 import MessageBubble from '../../components/chat/MessageBubble';
 import MessageInput from '../../components/chat/MessageInput';
@@ -29,8 +31,49 @@ export default function ConversationScreen() {
   // Load conversation details
   useEffect(() => {
     loadConversation();
-    loadMessages();
+    if (chatMode === 'offline') {
+      loadOfflineMessages();
+    } else {
+      loadMessages();
+    }
+  }, [id, chatMode]);
+
+  // Listen for BLE incoming messages
+  useEffect(() => {
+    const unsubscribe = onMessageReceived((msg) => {
+      if (msg.conversationId === id) {
+        setMessages(prev => [...prev, {
+          _id: msg.id,
+          senderId: msg.senderId,
+          senderName: msg.senderName,
+          text: msg.text,
+          type: msg.type,
+          createdAt: new Date(msg.createdAt).toISOString(),
+          isOffline: true,
+        }]);
+      }
+    });
+    return unsubscribe;
   }, [id]);
+
+  // Auto-sync when switching from offline to online
+  useEffect(() => {
+    if (chatMode === 'online') {
+      syncPendingMessages().then((count) => {
+        if (count > 0) {
+          console.log(`[CHAT] Synced ${count} offline messages`);
+          loadMessages(); // Reload from server
+        }
+      }).catch(() => {});
+    }
+  }, [chatMode]);
+
+  const loadOfflineMessages = async () => {
+    try {
+      const msgs = await getOfflineMessages(id);
+      setMessages(msgs);
+    } catch (e) {}
+  };
 
   // Mark as read when opening
   useEffect(() => {
@@ -85,13 +128,65 @@ export default function ConversationScreen() {
   };
 
   const handleSend = async (text) => {
-    try {
-      const res = await chatAPI.sendMessage(id, { text, type: 'text' });
-      const newMsg = res.data.message;
-      setMessages(prev => [...prev, newMsg]);
-      lastTimestampRef.current = newMsg.createdAt;
-    } catch (e) {
-      Alert.alert('Error', 'Failed to send message');
+    if (chatMode === 'offline') {
+      // Offline: save locally + send via BLE
+      const offlineMsg = {
+        _id: `offline-${Date.now()}`,
+        conversationId: id,
+        senderId: user?.mongoId,
+        senderName: user?.name,
+        text,
+        type: 'text',
+        createdAt: new Date().toISOString(),
+        isOffline: true,
+      };
+      setMessages(prev => [...prev, offlineMsg]);
+
+      // Save to SQLite for later sync
+      await saveOfflineMessage({
+        id: offlineMsg._id,
+        conversationId: id,
+        senderId: user?.mongoId,
+        senderName: user?.name,
+        text,
+        type: 'text',
+      });
+
+      // Try BLE broadcast to nearby peers
+      try {
+        await sendOfflineMessage(id, text);
+      } catch (e) {
+        // BLE may not be available, message still saved locally
+      }
+    } else {
+      // Online: send to server
+      try {
+        const res = await chatAPI.sendMessage(id, { text, type: 'text' });
+        const newMsg = res.data.message;
+        setMessages(prev => [...prev, newMsg]);
+        lastTimestampRef.current = newMsg.createdAt;
+      } catch (e) {
+        // Server failed - save offline as fallback
+        const fallbackMsg = {
+          _id: `offline-${Date.now()}`,
+          conversationId: id,
+          senderId: user?.mongoId,
+          senderName: user?.name,
+          text,
+          type: 'text',
+          createdAt: new Date().toISOString(),
+          isOffline: true,
+        };
+        setMessages(prev => [...prev, fallbackMsg]);
+        await saveOfflineMessage({
+          id: fallbackMsg._id,
+          conversationId: id,
+          senderId: user?.mongoId,
+          senderName: user?.name,
+          text,
+          type: 'text',
+        });
+      }
     }
   };
 
@@ -199,7 +294,7 @@ export default function ConversationScreen() {
           style={s.flatList}
         />
 
-        <MessageInput onSend={handleSend} disabled={chatMode === 'offline'} />
+        <MessageInput onSend={handleSend} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
